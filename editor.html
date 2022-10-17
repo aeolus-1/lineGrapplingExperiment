@@ -357,7 +357,7 @@
                 playerBall.vel.x -= (playerBall.pos.x-playerBall.grappelPoint.x)/50
                 playerBall.vel.y -= (playerBall.pos.y-playerBall.grappelPoint.y)/50
 
-            } else {
+            } else if (playerLinePoint != undefined) {
                 ctx.beginPath()
                 ctx.arc(playerLinePoint.x, playerLinePoint.y, 5, 0, Math.PI*2)
                 ctx.lineWidth = 5
@@ -396,10 +396,9 @@
             ctx.fill()
             ctx.closePath()
 
-            ctx.globalAlpha = 0.4
-            var imgEle = document.createElement("img"),
-                scale = 5
-            imgEle.src = "belgium-spa.png"
+            ctx.fillStyle = "#000"
+            ctx.font = "30px Arial"
+            ctx.fillText("Z to toggle pause; space to grappel; click drag to draw lines", 100, 100)
             //ctx.drawImage(imgEle, 0, 0, imgEle.width*scale, imgEle.height*scale)
 
         }, (1000)/30);
