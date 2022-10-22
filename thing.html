@@ -168,7 +168,7 @@
             var p = raycast
             points.push([
             p,
-            { ...p, vx: 0, vy: 0 },
+            { ...p, vx: (Math.random()-0.5)*120, vy: (Math.random()-0.5)*120 },
             ]);
         }
 
@@ -186,14 +186,26 @@
           playerBall.moving = !playerBall.moving;
         }
         if (e.key == " " && playerBall.grappeling == false) {
-          playerBall.grappeling = true;
-          playerBall.grappelPoint = getClosestPoint(playerBall.pos);
+          var num = 25
+          for (let i = 0; i < Math.PI*2; i+=((Math.PI*2)/num)) {
+            var raycast = march(playerBall.pos, i, 30)
+            console.log(raycast)
+            if (raycast != undefined) {
+            var p = raycast
+            points.push([
+            p,
+            { ...p, vx: (Math.random()-0.5)*120, vy: (Math.random()-0.5)*120 },
+            ]);
         }
+          }
+        }
+        playerBall.grappeling = true
       });
 
       document.addEventListener("keyup", (e) => {
         if (e.key == " ") {
-          playerBall.grappeling = false;
+            points = new Array()
+            playerBall.grappeling = false
         }
       });
       document.addEventListener("mouseup", (e) => {
@@ -507,7 +519,7 @@
         var playerLinePoint = getClosestPoint(playerBall.pos);
         
 
-        if (playerBall.grappeling) {
+        if (playerBall.grappeling && false) {
           ctx.beginPath();
           ctx.moveTo(playerBall.grappelPoint.x, playerBall.grappelPoint.y);
           ctx.lineTo(playerBall.pos.x, playerBall.pos.y);
@@ -592,7 +604,7 @@
 function randOb() {
 
     let angle = Math.PI*(randInt(0, 1000)/500)
-        pos = randCircle(canvas.width/2, canvas.height/2, 200, 500)
+        pos = randCircle(canvas.width/2, canvas.height/2, 50, 1500)
 
     if (Math.random() > 0.5) {
         shapeArray.push(Rect(pos.x, pos.y, randInt(40, 150), randInt(10, 150), angle))
