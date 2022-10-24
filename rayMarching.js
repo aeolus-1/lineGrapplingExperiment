@@ -86,9 +86,11 @@ function Collisions() {
         
     
         let rad = circle.r+circle2.r
-        
+
+        var angle = -(getAngle(circle2, circle)+90)*(Math.PI/180)
         return {
-            dst:dst-rad
+            dst:dst-rad,
+            pos:rayCast(circle2.x, circle2.y, angle, circle2.r)
         }
     }
 
@@ -104,7 +106,8 @@ function Collisions() {
         let dst = getDst(circle.x, circle.y, rp.x, rp.y)
 
         return {
-            dst:dst
+            dst:dst,
+            pos:rp,
         }
 
     }
@@ -117,7 +120,8 @@ function Collisions() {
         let collision = this.circleRectPlain(circle, rotatedRect)
 
         return {
-            dst:collision.dst
+            dst:collision.dst,
+            pos:rotate(circle.x, circle.y, collision.pos.x, collision.pos.y, -rect.angle),
         }
 
 
@@ -137,25 +141,29 @@ function getLargestCircle(p) {
 
         point = Circle(p.x, p.y, 0),
 
-        object = shapeArray[0]
+        object = shapeArray[0],
+
+        pos = v()
     
     for (let i = 0; i < shapeArray.length; i++) {
         const shape = shapeArray[i];
         
         if (shape.shape == "circle" ) {
-            let dst = collisions.circleCircle(point, shape).dst
+            let dst = collisions.circleCircle(point, shape)
 
-            if (dst < maxDst) {
-                maxDst = dst
+            if (dst.dst < maxDst) {
+                maxDst = dst.dst
                 object = shape
+                pos = dst.pos
             }
         }
     
         if (shape.shape == "rect" ) {
-            let dst = collisions.circleRect(point, shape).dst
-            if (dst < maxDst) {
-                maxDst = dst
+            let dst = collisions.circleRect(point, shape)
+            if (dst.dst < maxDst) {
+                maxDst = dst.dst
                 object = shape
+                pos = dst.pos
             }
         }
 
@@ -164,24 +172,25 @@ function getLargestCircle(p) {
 
     return {
         dst:maxDst,
-        ob:object
+        ob:object,
+        pos:pos,
     }
 }
 var marchShapes = new Array(),
 
     marchPointsMask = {}
 
-function stepMarching(p, angle, steps) {
+function stepMarching(p, angle, steps, maxDst, smallestPoint) {
 
     let lc = getLargestCircle(p),
         dst = lc.dst
+
 
     let newP = rayCast(p.x, p.y, angle, dst),
         shapeTemp = Circle(p.x, p.y, dst)
     shapeTemp.color = "#696969"
     marchShapes.push(shapeTemp)
 
-    
 
     steps -= 1
 
@@ -192,65 +201,89 @@ function stepMarching(p, angle, steps) {
 
     let minDst = 0.01
 
-    if (dst > minDst && steps > 1 && (outSideCol.dst <= 0)) {
-        return stepMarching(newP, angle, steps)
-    } else {
-        ctx.beginPath()
-
-        var totDst = getDst(playerBall.pos.x, playerBall.pos.y, newP.x, newP.y)
-
-            ctx.moveTo(playerBall.pos.x, playerBall.pos.y)
-            ctx.lineTo(newP.x, newP.y)
-            ctx.strokeStyle = "#000"
-            //ctx.stroke()
-        if (true) {
-
-            ctx.globalAlpha = clamp(dst/1000, 0.7, 1)
-            
-            
-    
-            ctx.beginPath()
-
-        
-    
-            ctx.arc(newP.x, newP.y, 2, 0, Math.PI*2)
-    
-            ctx.closePath()
-
-            ctx.fillStyle = "#ffffff"
-            ctx.fill()
-
-            if (dst <= minDst) {
-                if (marchPointsMask[lc.ob.id] == undefined) {
-                    marchPointsMask[lc.ob.id] = new Array()
-                }
-                var mask = marchPointsMask[lc.ob.id]
-                mask.push({x:newP.x, y:newP.y, angle:angle, dst:totDst})
-                return newP
-
-            }
-            
-
-            //renderShape(outSideCol.ob)
-
-            
+    if (dst < 100 && dst < smallestPoint.dst) {
+        smallestPoint = {
+            pos:lc.pos,
+            dst:dst,
         }
-        
+    }
+    var totDst = getDst(playerBall.pos.x, playerBall.pos.y, newP.x, newP.y)
+
+    var longTest = (steps > 1 && totDst < maxDst)
+
+    if (dst > minDst && longTest) {
+            return stepMarching(newP, angle, steps, maxDst, smallestPoint)
+            
+    } else {
         for (let i = 0; i < marchShapes.length; i++) {
             const shape = marchShapes[i];
             //renderShape(shape)
         }
+        if (longTest) {
+
+        
+            ctx.beginPath()
+
+
+                ctx.moveTo(playerBall.pos.x, playerBall.pos.y)
+                ctx.lineTo(newP.x, newP.y)
+                ctx.strokeStyle = "#000"
+                //ctx.stroke()
+            if (true) {
+
+                ctx.globalAlpha = clamp(dst/1000, 0.7, 1)
+                
+                
+        
+                ctx.beginPath()
+
+            
+        
+                ctx.arc(newP.x, newP.y, 2, 0, Math.PI*2)
+        
+                ctx.closePath()
+
+                ctx.fillStyle = "#ffffff"
+                ctx.fill()
+                
+                if (dst <= minDst) {
+                    if (marchPointsMask[lc.ob.id] == undefined) {
+                        marchPointsMask[lc.ob.id] = new Array()
+                    }
+                    var mask = marchPointsMask[lc.ob.id]
+                    mask.push({x:newP.x, y:newP.y, angle:angle, dst:totDst})
+                    return newP
+
+                }
+                
+
+                //renderShape(outSideCol.ob)
+
+                
+            }
+        } else {
+
+            return smallestPoint.pos
+        }
+       
+        
+        
     }
 
 }
 var start = undefined
-function march(p, angle, steps) {
+function march(p, angle, steps, maxDst) {
     
     marchShapes = new Array()
 
     start = p
 
-    return stepMarching(p, angle, steps)
+    var d = stepMarching(p, angle, steps, maxDst, {
+        pos:undefined,
+        dst:Infinity,
+    })
+    console.log(d)
+    return d
 
     
 
