@@ -282,7 +282,6 @@ function march(p, angle, steps, maxDst) {
         pos:undefined,
         dst:Infinity,
     })
-    console.log(d)
     return d
 
     

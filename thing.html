@@ -174,14 +174,16 @@
             ]);
             }
         }
+      } else {
+        bullets.push({ 
+            pos:{...playerBall.pos},
+            angle:-Math.atan2((canvas.width/2)-mouse.pos.x, (canvas.height/2)-mouse.pos.y)+(Math.PI*1.5),
+          })
       }
         
           mousedown = v(e.offsetX, e.offsetY);
 
-          bullets.push({ 
-            pos:{...playerBall.pos},
-            angle:-Math.atan2((canvas.width/2)-mouse.pos.x, (canvas.height/2)-mouse.pos.y)+(Math.PI*1.5),
-          })
+          
         
         
         
@@ -535,19 +537,21 @@
               console.log("yay")
               enemies.splice(i, 1)
             }else {
+
+              en.invulrable -= 1
             ctx.save()
             var angle = (-getAngle(en, playerBall.pos)-90)*(Math.PI/180)
             rotatePoint(en.x, en.y, angle+(Math.PI*0.5))
 
-            en.x += Math.cos(angle)*3*en.speed
-            en.y += Math.sin(angle)*3*en.speed
+            en.x += Math.cos(angle)*3*en.speed*(0.75+((0.25/en.maxHealth)))
+            en.y += Math.sin(angle)*3*en.speed*(0.75+((0.25/en.maxHealth)))
 
             if (getDst(playerBall.pos.x, playerBall.pos.y, en.x, en.y)<10) {
               playerBall.vel.x += 10000
             }
 
             ctx.translate(en.x, en.y)
-            ctx.scale(en.width/12, en.width/12)
+            ctx.scale(en.width/1.2, en.width/1.2)
             ctx.scale(en.maxHealth, en.maxHealth)
 
             ctx.beginPath()
@@ -557,7 +561,7 @@
             ctx.lineTo(0, -10)
             ctx.closePath()
             ctx.strokeStyle = "#000"
-            ctx.fillStyle = `rgba(0, 0, 0, ${(1-(1/en.health))*255})`
+            ctx.fillStyle = `rgba(0, 0, 0, ${(en.invulrable>0)?255:0}`
             ctx.fill()
             ctx.stroke()
             ctx.restore()
@@ -578,12 +582,13 @@
 
             for (let i = 0; i < enemies.length; i++) {
               const en2 = enemies[i];
-              if (getDst(en.pos.x, en.pos.y, en2.x, en2.y) < 40*en2.maxHealth*(en2.width/12)) {
+              if (en2.invulrable<=0 && !en.delete && getDst(en.pos.x, en.pos.y, en2.x, en2.y) < 15*en2.maxHealth) {
                 en2.health -= 1
                 if (en2.health <= 0) {
                   en2.delete = true
-                  en.delete = true
                 }
+                en.delete = true
+
               }
             }
 
@@ -717,10 +722,10 @@
     return rayCast(x, y, angle, dst)
 }
 
-function randOb() {
+function randOb(min, max) {
 
     let angle = Math.PI*(randInt(0, 1000)/500)
-        pos = randCircle(offset.x, offset.y, 400, 450)
+        pos = randCircle(offset.x, offset.y, min, max)
 
     if (Math.random() > 0.5) {
         shapeArray.push(Rect(pos.x, pos.y, randInt(40, 150), randInt(10, 150), angle))
@@ -736,13 +741,19 @@ document.addEventListener('contextmenu', event => event.preventDefault());
 //shapeArray.push(Rect(canvas.width+0.4, 0, 0, canvas.height*2+0.4))
 
 //shapeArray.push(Rect(300, 600,500, 200, Math.PI*0.8))
-for(let i=0;i<15;i++) {
-    randOb()
+for(let i=0;i<10;i++) {
+    randOb(900, 1100)
+    randOb(500, 500)
 }
 setInterval(() => {
-  var health = [1, 1, 1, 2, 2, 3][randInt(0, 6)]
-  enemies.push({...randCircle(0,0,1600,1600),width:randInt(10, 15), maxHealth:health, health:health, speed:randInt(10, 15)*0.1})
-}, 4500);
+  if (enemies.length < 20) {
+  var health = [2.5, 2.5, 2.5, 5, 5, 10][randInt(0, 5)]
+  enemies.push({...randCircle(0,0,1600,1600),width:1, maxHealth:health, health:health, speed:randInt(10, 15)*0.1, invulrable:0})
+  }
+}, 2500);
+setInterval(() => {
+  enemies.push({...randCircle(0,0,1600,1600),width:1, maxHealth:6, health:6, speed:randInt(10, 15)*0.1, invulrable:20000})
+}, 20000);
     </script>
   </body>
 </html>
