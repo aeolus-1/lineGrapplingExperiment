@@ -10,12 +10,21 @@
         overflow: hidden;
       }
     </style>
+    <script src="socket.io.js"></script>
     <script src="common.js"></script>
     <script src="rayMarching.js"></script>
+    <script src="p2pServer.js"></script>
+    <script src="multiplayer.js"></script>
   </head>
   <body>
     <canvas id="c"></canvas>
     <script>
+
+      var multiplayerController = new MultiplayerController()
+      setTimeout(()=>{
+        multiplayerController.init()
+      },1000)
+
       var points = [],
       clickPoints = [],
       shapeArray = [],
@@ -35,6 +44,8 @@
                 arc:true,
             }
         ]*/
+
+            var deltaTime = 0.25
 
       var lineCurveRad = 50;
 
@@ -161,6 +172,7 @@
       document.addEventListener("mousedown", (e) => {
         
         if (e.button == 0) {
+          unclickTime = (new Date().getTime())
           mousedown = v(e.offsetX, e.offsetY);
           mouse.down = true;
           var raycast = march(playerBall.pos, -Math.atan2((canvas.width/2)-mouse.pos.x, (canvas.height/2)-mouse.pos.y)+(Math.PI*1.5), 30, 1200)
@@ -175,10 +187,14 @@
             }
         }
       } else {
-        bullets.push({ 
-            pos:{...playerBall.pos},
-            angle:-Math.atan2((canvas.width/2)-mouse.pos.x, (canvas.height/2)-mouse.pos.y)+(Math.PI*1.5),
-          })
+        if (multiplayerController.connectionPort.host) {
+          bullets.push({ 
+              pos:{...playerBall.pos},
+              angle:-Math.atan2((canvas.width/2)-mouse.pos.x, (canvas.height/2)-mouse.pos.y)+(Math.PI*1.5),
+            })
+          } else {
+            multiplayerController.shootBullet()
+          }
       }
         
           mousedown = v(e.offsetX, e.offsetY);
@@ -205,6 +221,42 @@
           playerBall.moving = !playerBall.moving;
         }
         if (e.key == " " && playerBall.grappeling == false) {
+
+          var mouseAngle = -Math.atan2((canvas.width/2)-mouse.pos.x, (canvas.height/2)-mouse.pos.y)+(Math.PI*1.5)
+          var enemyDirections = []
+          for (let i = 0; i < enemies.length; i++) {
+            const en = enemies[i];
+            if (en.invulrable<500) {
+              var angle = getAngle(playerBall.pos,en)
+              enemyDirections.push(
+                {
+                  angle:angle,
+                  dst:Math.abs(angleDifference(
+                    (Math.PI/180)*angle, 
+                    mouseAngle
+                )/(Math.PI/180))
+                }
+              )
+            }
+          }
+          enemyDirections = enemyDirections.sort((a,b)=>{return Math.sign(a.dst-b.dst)})
+          if (enemyDirections.length > 0) {
+            if (enemyDirections[0].dst<90) mouseAngle = enemyDirections[0].angle*(Math.PI/180)
+          }
+
+
+
+          var num = 1
+          for (let i = 0; i < num; i++) {
+            var angle = mouseAngle
+            //angle += (Math.random()-0.5)*(Math.PI*0.1)
+            bullets.push({ 
+            pos:{...playerBall.pos},
+            angle:angle,
+          })
+          }
+          
+          /*
           var num = 25
           for (let i = 0; i < Math.PI*2; i+=((Math.PI*2)/num)) {
             var raycast = march(playerBall.pos, i, 30, 400)
@@ -219,7 +271,7 @@
             ]);
             }
         }
-          }
+          }*/
         }
         playerBall.grappeling = true
         ctx.restore()
@@ -256,15 +308,19 @@
         mouse.pos = v(e.offsetX, e.offsetY);
       });
 
-      var playerBall = {
-        pos: v(offset.x, offset.y),
-        vel: v(),
-
-        grappeling: false,
-        grappelPoint: v(),
-
-        moving: false,
-      };
+      var players = []
+      function ball() {
+        return {...{
+          pos: v(offset.x, offset.y),
+          vel: v(),
+  
+          grappeling: false,
+          grappelPoint: v(),
+  
+          moving: false,
+        }}
+      }
+      var playerBall = ball();
 
       function getClosestPoint(pos) {
         var smolPoint = { point: undefined, line: undefined, dst: Infinity };
@@ -299,9 +355,13 @@
         };
         points.push([point, { ...point, vx: 0, vy: 0 }]);
       }
-
+      var unclickTime = (new Date().getTime())
       var grav = 0;
       setInterval(() => {
+        deltaTime = !mouse.down?(
+          Math.max(Math.min(1000/((new Date().getTime())-unclickTime), 1), 0.3)*0.4
+
+        ):1*0.4
         canvas.width = canvas.width;
         ctx.save()
         ctx.translate(-playerBall.pos.x+(canvas.width/2), -playerBall.pos.y+(canvas.height/2))
@@ -467,8 +527,8 @@
           point[1].vy += grav;
 
           function aDst(pointA) {
-            point[1].vx -= (point[1].x - pointA.x) / 4;
-            point[1].vy -= (point[1].y - pointA.y) / 4;
+            point[1].vx -= ((point[1].x - pointA.x) / 4)*deltaTime;
+            point[1].vy -= ((point[1].y - pointA.y) / 4)*deltaTime;
           }
 
           aDst(point[0]);
@@ -476,8 +536,8 @@
 
 
 
-          playerBall.vel.x -= (playerBall.pos.x - point[0].x) / 100;
-          playerBall.vel.y -= (playerBall.pos.y - point[0].y) / 100;
+          playerBall.vel.x -= ((playerBall.pos.x - point[0].x) / 100)*deltaTime;
+          playerBall.vel.y -= ((playerBall.pos.y - point[0].y) / 100)*deltaTime;
         }
 
         for (let i = 0; i < shapeArray.length; i++) {
@@ -543,8 +603,8 @@
             var angle = (-getAngle(en, playerBall.pos)-90)*(Math.PI/180)
             rotatePoint(en.x, en.y, angle+(Math.PI*0.5))
 
-            en.x += Math.cos(angle)*3*en.speed*(0.75+((0.25/en.maxHealth)))
-            en.y += Math.sin(angle)*3*en.speed*(0.75+((0.25/en.maxHealth)))
+            en.x += Math.cos(angle)*3*en.speed*(0.75+((0.25/en.maxHealth)))*deltaTime
+            en.y += Math.sin(angle)*3*en.speed*(0.75+((0.25/en.maxHealth)))*deltaTime
 
             if (getDst(playerBall.pos.x, playerBall.pos.y, en.x, en.y)<10) {
               playerBall.vel.x += 10000
@@ -553,6 +613,8 @@
             ctx.translate(en.x, en.y)
             ctx.scale(en.width/1.2, en.width/1.2)
             ctx.scale(en.maxHealth, en.maxHealth)
+
+            ctx.lineWidth = 1/((en.width/1.2)*en.maxHealth)
 
             ctx.beginPath()
             ctx.moveTo(0, -10)
@@ -575,10 +637,10 @@
             }else {
             ctx.save()
             var angle = en.angle
-            rotatePoint(en.pos.x, en.pos.y, angle+(Math.PI*0.5))
-
-            en.pos.x += Math.cos(angle)*35
-            en.pos.y += Math.sin(angle)*35
+            //rotatePoint(en.pos.x, en.pos.y, angle+(Math.PI*0.5))
+              var mod = 1-(Math.random()*0.3)
+            en.pos.x += Math.cos(angle)*35*mod*deltaTime
+            en.pos.y += Math.sin(angle)*35*mod*deltaTime
 
             for (let i = 0; i < enemies.length; i++) {
               const en2 = enemies[i];
@@ -594,10 +656,10 @@
 
             ctx.translate(en.pos.x, en.pos.y)
             ctx.beginPath()
-            ctx.moveTo(0, -10)
+            ctx.moveTo(0, 0)
             ctx.lineTo(2, 5)
             ctx.lineTo(-2, 5)
-            ctx.lineTo(0, -10)
+            ctx.lineTo(0, 0)
             ctx.closePath()
             ctx.strokeStyle = "#000"
             
@@ -611,12 +673,15 @@
                 playerBall.pos.x + (Math.cos(mouseAngle)*1000), 
                 playerBall.pos.y + (Math.sin(mouseAngle)*1000)
             )
+        
         ctx.beginPath()
         ctx.moveTo(playerBall.pos.x, playerBall.pos.y)
         ctx.lineTo(pos.x, pos.y)
         ctx.strokeStyle = "#f003"
         ctx.stroke()
         ctx.closePath()
+        
+        
 
         var grappelPoint = march(playerBall.pos, -Math.atan2((canvas.width/2)-mouse.pos.x, (canvas.height/2)-mouse.pos.y)+(Math.PI*1.5), 30, 1200)
 
@@ -642,9 +707,9 @@
           ctx.closePath();
 
           playerBall.vel.x -=
-            (playerBall.pos.x - playerBall.grappelPoint.x) / 50;
+            ((playerBall.pos.x - playerBall.grappelPoint.x) / 50)*deltaTime;
           playerBall.vel.y -=
-            (playerBall.pos.y - playerBall.grappelPoint.y) / 50;
+            ((playerBall.pos.y - playerBall.grappelPoint.y) / 50)*deltaTime;
         } else if (playerLinePoint != undefined) {
           ctx.beginPath();
           ctx.arc(playerLinePoint.x, playerLinePoint.y, 5, 0, Math.PI * 2);
@@ -681,11 +746,15 @@
           }
         }
 
-        ctx.beginPath();
-        ctx.arc(playerBall.pos.x, playerBall.pos.y, 10, 0, Math.PI * 2);
-        ctx.fillStyle = "#000"
-        ctx.fill();
-        ctx.closePath();
+
+        let players = [playerBall, ...Object.values(multiplayers)]
+        for(let i=0; i<players.length; i++) {
+          ctx.beginPath();
+          ctx.arc(players[i].pos.x, players[i].pos.y, 10, 0, Math.PI * 2);
+          ctx.fillStyle = "#000"
+          ctx.fill();
+          ctx.closePath();
+        }
 
         //ctx.globalAlpha = 1;
         //ctx.drawImage(i, -i.width/2,-i.height/2)
@@ -701,19 +770,19 @@
           if (getDst(playerBall.pos.x, playerBall.pos.y, 0, 0) > 1540) {
             playerBall.pos.x += 10000
           }
-          playerBall.pos.x += playerBall.vel.x;
-          playerBall.pos.y += playerBall.vel.y;
+          playerBall.pos.x += playerBall.vel.x*deltaTime;
+          playerBall.pos.y += playerBall.vel.y*deltaTime;
 
-          playerBall.vel.x *= 0.96;
-          playerBall.vel.y *= 0.96;
+          playerBall.vel.x *= Math.pow(0.96, deltaTime);
+          playerBall.vel.y *= Math.pow(0.96, deltaTime);
 
-          playerBall.vel.y += 0.98;
+          playerBall.vel.y += 0.98*deltaTime;
 
           
 
         }
         ctx.restore()
-    }, 1000 / 25);
+    }, 1000 / 60);
 
       function randCircle(x, y, min, max) {
     let dst = randInt(min, max),
